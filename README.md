@@ -17,8 +17,9 @@ range that measures its own accuracy.
    cache rewrites), each with its share of your spend and a tip.
 2. **Usage-limit % in your status line (optional).** `5h: 23% · 7d: 41% · $1.25 API value this session · Equiv 484k`.
    It wraps an existing status line instead of replacing it.
-3. **A note before an expensive prompt (opt-in).** A hook adds one line to prompts whose
-   typical estimate is large. It never blocks.
+3. **A note on the first prompt of a session (opt-in).** If the task you start a session
+   with looks expensive, a hook adds one line with its typical estimate. Follow-up messages
+   never get a note. It never blocks. Details in [Prompt note](#prompt-note).
 4. **Guard (opt-in): a session token budget and a context-full warning.** Delivered to
    Claude itself, so they also work during long autonomous runs. Over budget, Claude is told
    to finish the current step and propose a fresh session. It never blocks.
@@ -49,8 +50,8 @@ npx budgetline setup-statusline --write
 
 Plugin commands:
 
-- `/estimate <task description>` (or `/budgetline:estimate`): estimates only; it does not
-  start the task.
+- `/budgetline:estimate <task description>` (or `/estimate` when no other plugin uses the
+  name): estimates only; it does not start the task.
 - `/budgetline:budget <tokens> [--warn <tokens>|80%]` sets a budget for the session you are
   in (`60k`, `1.5M` work too); `/budgetline:budget clear` removes it.
 
@@ -109,6 +110,23 @@ The $ is the session cost Claude Code itself reports. On a plan you do not pay p
 it is **API-equivalent value**: what the same work would cost on the API. What limits you
 is the **usage-limit %**, so once the status line has seen it, every view shows the % first.
 Without limit data (pay-as-you-go API), the $ is your real cost and comes first.
+
+## Prompt note
+
+Off by default. `budgetline hook enable` turns it on; **`budgetline hook disable` turns it
+off** (`budgetline hook status` shows which). With the plugin, run them as
+`npx budgetline hook …`.
+
+- **Only the first prompt of a session** is estimated: the first one this hook sees for that
+  session id, while the transcript has no reply yet. Enabling the hook mid-session or
+  resuming a session does not count as a start, and follow-up messages never get a note.
+- It appears only when the typical estimate is above `hookThreshold` (500k equivalent
+  tokens by default, in `config.json`).
+- It uses your similar past tasks as they are, **without the bias correction** that
+  `estimate` applies: that correction was measured on whole sessions, not on one message.
+- With few or very different similar tasks it says so (`low confidence`) and gives the
+  rough figure only, without calling the task big. `/budgetline:estimate <task>` shows the
+  full range and savings tips.
 
 ## Guard
 
@@ -222,8 +240,8 @@ If your bill differs, the difference comes from Claude Code's figure, not from `
 ## Contributing
 
 Bug reports and pull requests are welcome; see [CONTRIBUTING](.github/CONTRIBUTING.md).
-`npm install`, then `npm run verify` (lint, types, tests, build, and a check that the
-committed `dist/cli.js` matches the sources: commit it after `npm run build`).
+`npm install`, then `npm run verify` (lint, types, tests and build). Change only `src/`
+and `tests/`: the maintainer rebuilds and commits `dist/cli.js`.
 
 ## License
 

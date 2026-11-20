@@ -32,6 +32,8 @@ describe('cli', () => {
     const c = capture();
     expect(await main(['--help'])).toBe(0);
     expect(c.out()).toContain('budgetline estimate');
+    expect(c.out()).toContain('See where your Claude Code budget goes — and stop hitting your limits.');
+    expect(c.out()).not.toMatch(/before you hit Enter/i);
     expect(await main(['nope'])).toBe(1);
   });
 

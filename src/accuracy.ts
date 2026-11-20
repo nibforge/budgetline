@@ -1,6 +1,5 @@
-import { appendFileSync } from 'node:fs';
 import { percentile } from './cost.js';
-import { readJsonl } from './jsonl.js';
+import { appendJsonl, readJsonl } from './jsonl.js';
 import type { Range } from './estimate.js';
 import type { TaskRow } from './history.js';
 
@@ -41,7 +40,7 @@ const MIN_JUDGE = 5;
 
 export function logEstimate(file: string, project: string, eq: Range, now = new Date(), raw = eq.typical): void {
   const e: EstimateLog = { ts: now.toISOString(), project, low: eq.low, typical: eq.typical, high: eq.high, raw };
-  appendFileSync(file, JSON.stringify(e) + '\n');
+  appendJsonl(file, e);
 }
 
 export function readLog(file: string): EstimateLog[] {

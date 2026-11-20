@@ -10,7 +10,7 @@ import { readBilling, readSamples, type LimitSample } from './calibration.js';
 import { dataDir } from './paths.js';
 import { historyJson, renderHistory } from './render-history.js';
 
-const HELP = `budgetline: know what it costs before you hit Enter.
+const HELP = `budgetline: See where your Claude Code budget goes — and stop hitting your limits.
 
 Usage:
   budgetline history  [--project <text>] [--since <YYYY-MM-DD>] [--limit N] [--json] [--show-prompts] [--show-titles]
@@ -18,7 +18,7 @@ Usage:
   budgetline estimate "<task description>" [--cwd <dir>] [--session <id>] [--json]
   budgetline statusline install | uninstall | status
   budgetline setup-statusline [--write [--yes]]   (prints the settings.json entry; --write installs it)
-  budgetline hook enable | disable | status
+  budgetline hook enable | disable | status   (note on the first prompt of a session if it looks expensive)
   budgetline guard enable [--budget 200000] [--warn 160000|80%] [--context 70] [--window N] | disable | status
   budgetline guard session --budget N [--warn N|80%] [--session <id>] | --clear   (this session only)
 

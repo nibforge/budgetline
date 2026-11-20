@@ -1,6 +1,7 @@
-import { appendFileSync, closeSync, existsSync, fstatSync, openSync, readFileSync, readSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs';
 import type { LimitSample } from './calibration.js';
-import { parseJsonl } from './jsonl.js';
+import { writeAtomic } from './fsutil.js';
+import { appendJsonl, parseJsonl } from './jsonl.js';
 
 /** Samples older than this are dropped. Calibration only needs recent pairs. */
 export const KEEP_DAYS = 30;
@@ -44,7 +45,11 @@ function prune(file: string, now: Date): void {
   const cutoff = now.getTime() - KEEP_DAYS * DAY_MS;
   if (!first || Date.parse(first.ts) >= cutoff - DAY_MS) return;
   const kept = parseJsonl<LimitSample>(readFileSync(file, 'utf8')).filter((s) => Date.parse(s.ts) >= cutoff);
-  writeFileSync(file, kept.map((s) => JSON.stringify(s) + '\n').join(''));
+  try {
+    writeAtomic(file, kept.map((s) => JSON.stringify(s) + '\n').join(''));
+  } catch {
+    // pruning is housekeeping: try again with the next sample
+  }
 }
 
 /** Append a sample only if %, cost or reset time changed since the session's last one; keep the file bounded. */
@@ -53,7 +58,7 @@ export function logSample(file: string, sample: LimitSample, now = new Date()): 
     const last = lastOf(file, sample.session);
     if (last && same(last, sample)) return false;
   }
-  appendFileSync(file, JSON.stringify(sample) + '\n');
+  appendJsonl(file, sample);
   prune(file, now);
   return true;
 }

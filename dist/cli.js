@@ -317,7 +317,7 @@ var init_paths = __esm({
 });
 
 // src/jsonl.ts
-import { existsSync as existsSync3, readFileSync as readFileSync2 } from "node:fs";
+import { appendFileSync, closeSync as closeSync2, existsSync as existsSync3, openSync as openSync2, readFileSync as readFileSync2, readSync as readSync2, statSync } from "node:fs";
 function parseJsonl(text) {
   const out = [];
   for (const raw of text.split("\n")) {
@@ -332,6 +332,21 @@ function parseJsonl(text) {
 }
 function readJsonl(file) {
   return existsSync3(file) ? parseJsonl(readFileSync2(file, "utf8")) : [];
+}
+function endsMidLine(file) {
+  const size = existsSync3(file) ? statSync(file).size : 0;
+  if (size === 0) return false;
+  const fd = openSync2(file, "r");
+  try {
+    const b = Buffer.alloc(1);
+    readSync2(fd, b, 0, 1, size - 1);
+    return b[0] !== 10;
+  } finally {
+    closeSync2(fd);
+  }
+}
+function appendJsonl(file, value) {
+  appendFileSync(file, (endsMidLine(file) ? "\n" : "") + JSON.stringify(value) + "\n");
 }
 var init_jsonl = __esm({
   "src/jsonl.ts"() {
@@ -534,7 +549,7 @@ var init_parse = __esm({
 });
 
 // src/transcripts/scan.ts
-import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync3, statSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync3, statSync as statSync2 } from "node:fs";
 import { basename, dirname, join as join2 } from "node:path";
 function listJsonl(dir) {
   if (!existsSync4(dir)) return [];
@@ -556,7 +571,7 @@ function findSessions(claudeDir2) {
 }
 function signature(f) {
   return [f.main, ...f.subagents].map((p) => {
-    const st = statSync(p);
+    const st = statSync2(p);
     return `${p}:${st.size}:${Math.round(st.mtimeMs)}`;
   }).join("|");
 }
@@ -589,6 +604,12 @@ function entryFor(f, old, keepPrompts) {
     return null;
   }
 }
+function saveCache(file, entries) {
+  try {
+    writeAtomic(file, JSON.stringify({ version: CACHE_VERSION, entries }));
+  } catch {
+  }
+}
 function loadSessions(opts) {
   const useCache = !opts.keepPrompts && opts.cacheFile;
   const old = useCache ? readCache(opts.cacheFile) : {};
@@ -603,7 +624,7 @@ function loadSessions(opts) {
     if (r.entry.session) sessions.push(r.entry.session);
   }
   changed ||= Object.keys(old).length !== Object.keys(next).length;
-  if (useCache && changed) writeFileSync2(opts.cacheFile, JSON.stringify({ version: CACHE_VERSION, entries: next }));
+  if (useCache && changed) saveCache(opts.cacheFile, next);
   sessions.sort((a, b) => a.start < b.start ? -1 : 1);
   return sessions;
 }
@@ -611,6 +632,7 @@ var CACHE_VERSION;
 var init_scan = __esm({
   "src/transcripts/scan.ts"() {
     "use strict";
+    init_fsutil();
     init_parse();
     CACHE_VERSION = 5;
   }
@@ -637,10 +659,9 @@ var init_data = __esm({
 });
 
 // src/accuracy.ts
-import { appendFileSync } from "node:fs";
 function logEstimate(file, project, eq, now = /* @__PURE__ */ new Date(), raw = eq.typical) {
   const e = { ts: now.toISOString(), project, low: eq.low, typical: eq.typical, high: eq.high, raw };
-  appendFileSync(file, JSON.stringify(e) + "\n");
+  appendJsonl(file, e);
 }
 function readLog(file) {
   return readJsonl(file);
@@ -891,7 +912,7 @@ var init_incremental = __esm({
 });
 
 // src/config.ts
-import { existsSync as existsSync5, readFileSync as readFileSync5, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
+import { existsSync as existsSync5, readFileSync as readFileSync5, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { join as join5 } from "node:path";
 function readJson(file) {
   try {
@@ -909,7 +930,7 @@ function migrate(dir) {
   if (typeof old.enabled === "boolean" && !("hookEnabled" in cur)) moved.hookEnabled = old.enabled;
   if (Number(old.threshold) > 0 && !("hookThreshold" in cur)) moved.hookThreshold = Number(old.threshold);
   try {
-    writeFileSync3(configFile(dir), JSON.stringify({ ...cur, ...moved }, null, 2));
+    writeFileSync2(configFile(dir), JSON.stringify({ ...cur, ...moved }, null, 2));
     rmSync2(legacyHookFile(dir), { force: true });
   } catch {
   }
@@ -924,7 +945,7 @@ function readConfig(dir) {
   return { ...DEFAULTS, ...stored(dir) };
 }
 function writeConfig(dir, patch) {
-  writeFileSync3(configFile(dir), JSON.stringify({ ...stored(dir), ...patch }, null, 2));
+  writeFileSync2(configFile(dir), JSON.stringify({ ...stored(dir), ...patch }, null, 2));
 }
 function warnTokens(c) {
   const w = c.sessionWarnTokens;
@@ -950,7 +971,7 @@ var init_config = __esm({
 });
 
 // src/guard-state.ts
-import { readFileSync as readFileSync6, writeFileSync as writeFileSync4 } from "node:fs";
+import { readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "node:fs";
 import { join as join6 } from "node:path";
 function freshState() {
   return { offset: 0, lastKey: "", eq: 0, context: 0, warned: { budget: false, context: false } };
@@ -964,7 +985,7 @@ function readState(dir, session) {
 }
 function writeState(dir, session, s) {
   privateDir(join6(dir, "guard"));
-  writeFileSync4(stateFile(dir, session), JSON.stringify(s));
+  writeFileSync3(stateFile(dir, session), JSON.stringify(s));
 }
 function applyLine(s, o) {
   if (o?.type !== "assistant" || o.isSidechain || !o.message?.usage || o.message.model === "<synthetic>") return;
@@ -1167,17 +1188,17 @@ var init_guard = __esm({
 });
 
 // src/limits-log.ts
-import { appendFileSync as appendFileSync2, closeSync as closeSync2, existsSync as existsSync6, fstatSync as fstatSync2, openSync as openSync2, readFileSync as readFileSync7, readSync as readSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import { closeSync as closeSync3, existsSync as existsSync6, fstatSync as fstatSync2, openSync as openSync3, readFileSync as readFileSync7, readSync as readSync3 } from "node:fs";
 function readRange(file, from, bytes) {
-  const fd = openSync2(file, "r");
+  const fd = openSync3(file, "r");
   try {
     const size = fstatSync2(fd).size;
     const len = Math.min(bytes, size);
     const buf = Buffer.alloc(len);
-    readSync2(fd, buf, 0, len, from === "end" ? size - len : 0);
+    readSync3(fd, buf, 0, len, from === "end" ? size - len : 0);
     return buf.toString("utf8");
   } finally {
-    closeSync2(fd);
+    closeSync3(fd);
   }
 }
 function lastSample(samples, session) {
@@ -1195,14 +1216,17 @@ function prune(file, now) {
   const cutoff = now.getTime() - KEEP_DAYS * DAY_MS;
   if (!first || Date.parse(first.ts) >= cutoff - DAY_MS) return;
   const kept = parseJsonl(readFileSync7(file, "utf8")).filter((s) => Date.parse(s.ts) >= cutoff);
-  writeFileSync5(file, kept.map((s) => JSON.stringify(s) + "\n").join(""));
+  try {
+    writeAtomic(file, kept.map((s) => JSON.stringify(s) + "\n").join(""));
+  } catch {
+  }
 }
 function logSample(file, sample, now = /* @__PURE__ */ new Date()) {
   if (existsSync6(file)) {
     const last = lastOf(file, sample.session);
     if (last && same(last, sample)) return false;
   }
-  appendFileSync2(file, JSON.stringify(sample) + "\n");
+  appendJsonl(file, sample);
   prune(file, now);
   return true;
 }
@@ -1210,6 +1234,7 @@ var KEEP_DAYS, DAY_MS, TAIL_BYTES, same;
 var init_limits_log = __esm({
   "src/limits-log.ts"() {
     "use strict";
+    init_fsutil();
     init_jsonl();
     KEEP_DAYS = 30;
     DAY_MS = 864e5;
@@ -1421,14 +1446,14 @@ var init_estimate = __esm({
 });
 
 // src/repo-context.ts
-import { existsSync as existsSync7, readdirSync as readdirSync2, statSync as statSync2 } from "node:fs";
+import { existsSync as existsSync7, readdirSync as readdirSync2, statSync as statSync3 } from "node:fs";
 import { join as join8, relative, resolve } from "node:path";
 function tokensOfBytes(bytes) {
   return Math.round(bytes / 4);
 }
 function fileTokens(cwd, p) {
   try {
-    const st = statSync2(p);
+    const st = statSync3(p);
     return st.isFile() ? { path: (relative(cwd, p) || p).replace(/\\/g, "/"), tokens: tokensOfBytes(st.size) } : null;
   } catch {
     return null;
@@ -1989,24 +2014,66 @@ var init_setup_statusline = __esm({
   }
 });
 
+// src/first-prompt.ts
+import { existsSync as existsSync9, readFileSync as readFileSync8 } from "node:fs";
+import { join as join13 } from "node:path";
+function readSeen(dir) {
+  try {
+    const v = JSON.parse(readFileSync8(seenFile(dir), "utf8"));
+    return Array.isArray(v) ? v.filter((s) => typeof s === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function hasReply(transcript) {
+  if (typeof transcript !== "string" || !existsSync9(transcript)) return false;
+  try {
+    return /"type"\s*:\s*"assistant"/.test(readFileSync8(transcript, "utf8"));
+  } catch {
+    return true;
+  }
+}
+function isFirstPrompt(dir, session, transcript) {
+  if (typeof session === "string" && session) {
+    const seen = readSeen(dir);
+    if (seen.includes(session)) return false;
+    try {
+      writeAtomic(seenFile(dir), JSON.stringify([...seen, session].slice(-KEEP)));
+    } catch {
+    }
+  }
+  return !hasReply(transcript);
+}
+var KEEP, seenFile;
+var init_first_prompt = __esm({
+  "src/first-prompt.ts"() {
+    "use strict";
+    init_fsutil();
+    KEEP = 200;
+    seenFile = (dir) => join13(dir, "prompt-note-sessions.json");
+  }
+});
+
 // src/hook.ts
 var hook_exports = {};
 __export(hook_exports, {
+  ESTIMATE_COMMAND: () => ESTIMATE_COMMAND,
   hookCommand: () => hookCommand,
-  hookOutput: () => hookOutput
+  hookOutput: () => hookOutput,
+  message: () => message
 });
-import { join as join13 } from "node:path";
+import { join as join14 } from "node:path";
 function setEnabled(dir, enabled) {
   writeConfig(dir, { hookEnabled: enabled });
-  return enabled ? "Hook enabled: prompts that look expensive get a one-line budgetline note. It never blocks a prompt. Disable with: budgetline hook disable" : "Hook disabled.";
+  return enabled ? "Hook enabled: the first prompt of a session gets a one-line budgetline note when it looks expensive. It never blocks a prompt. Disable with: budgetline hook disable" : "Hook disabled.";
 }
 function hookOutput(input, dir, sessions, cfg = readConfig(dir)) {
   if (!cfg.hookEnabled) return "";
   try {
-    const { prompt, cwd, session_id: session } = JSON.parse(input);
-    if (!isRealPrompt(prompt)) return "";
-    const { calibration, plan } = readBilling(join13(dir, "limits.jsonl"));
-    const opts = { session: typeof session === "string" ? session : void 0, log: readLog(join13(dir, "estimates.jsonl")) };
+    const { prompt, cwd, session_id: session, transcript_path: transcript } = JSON.parse(input);
+    if (!isRealPrompt(prompt) || !isFirstPrompt(dir, session, transcript)) return "";
+    const { calibration, plan } = readBilling(join14(dir, "limits.jsonl"));
+    const opts = { session: typeof session === "string" ? session : void 0 };
     const r = runEstimate(sessions(), prompt, cwd || process.cwd(), calibration, plan, opts);
     if (!r || r.eq.typical < cfg.hookThreshold) return "";
     return JSON.stringify({ systemMessage: message(r) });
@@ -2017,28 +2084,31 @@ function hookOutput(input, dir, sessions, cfg = readConfig(dir)) {
 function message(r) {
   const limit = r.limit5h ? `~${Math.max(1, Math.round(r.limit5h.typical))}% of your 5-hour limit, ` : "";
   const cost = r.usd ? `, ~${usd(r.usd.typical, true)}${r.plan ? " API-equivalent value" : ""}` : "";
-  const note = r.est.fewData || r.est.wide ? " (low confidence)" : "";
-  return `budgetline: this looks like a big task: ${limit}~${tokens(r.eq.typical)} equivalent tokens${cost} typical${note}. Run /estimate for the range and savings tips.`;
+  const figures = `${limit}~${tokens(r.eq.typical)} equivalent tokens${cost} typical`;
+  const more = `Range and savings tips: ${ESTIMATE_COMMAND} <task>.`;
+  if (r.est.fewData || r.est.wide) return `budgetline: rough figure for tasks like this (low confidence): ${figures}. ${more}`;
+  return `budgetline: this looks like a big task: ${figures}. ${more}`;
 }
 function hookCommand(p) {
   const sub = p.positional[0];
   const dir = dataDir();
   if (sub === "enable") return setEnabled(dir, true);
   if (sub === "disable") return setEnabled(dir, false);
-  if (sub === "status") return `Hook: ${readConfig(dir).hookEnabled ? "enabled" : "disabled (default)"}.`;
+  if (sub === "status") return `Prompt note (first prompt of each session): ${readConfig(dir).hookEnabled ? "enabled" : "disabled (default)"}.`;
   throw new Error("usage: budgetline hook enable | disable | status");
 }
-var isRealPrompt;
+var ESTIMATE_COMMAND, isRealPrompt;
 var init_hook = __esm({
   "src/hook.ts"() {
     "use strict";
-    init_accuracy();
     init_calibration();
+    init_first_prompt();
     init_text();
     init_config();
     init_estimate_cmd();
     init_format();
     init_paths();
+    ESTIMATE_COMMAND = "/budgetline:estimate";
     isRealPrompt = (prompt) => typeof prompt === "string" && prompt.trim() !== "" && !isEstimateRequest(prompt);
   }
 });
@@ -2093,8 +2163,8 @@ init_data();
 init_accuracy();
 init_calibration();
 init_paths();
-import { readFileSync as readFileSync8 } from "node:fs";
-import { join as join14 } from "node:path";
+import { readFileSync as readFileSync9 } from "node:fs";
+import { join as join15 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/render-history.ts
@@ -2253,7 +2323,7 @@ function historyJson(d, opts) {
 }
 
 // src/cli.ts
-var HELP = `budgetline: know what it costs before you hit Enter.
+var HELP = `budgetline: See where your Claude Code budget goes \u2014 and stop hitting your limits.
 
 Usage:
   budgetline history  [--project <text>] [--since <YYYY-MM-DD>] [--limit N] [--json] [--show-prompts] [--show-titles]
@@ -2261,7 +2331,7 @@ Usage:
   budgetline estimate "<task description>" [--cwd <dir>] [--session <id>] [--json]
   budgetline statusline install | uninstall | status
   budgetline setup-statusline [--write [--yes]]   (prints the settings.json entry; --write installs it)
-  budgetline hook enable | disable | status
+  budgetline hook enable | disable | status   (note on the first prompt of a session if it looks expensive)
   budgetline guard enable [--budget 200000] [--warn 160000|80%] [--context 70] [--window N] | disable | status
   budgetline guard session --budget N [--warn N|80%] [--session <id>] | --clear   (this session only)
 
@@ -2270,11 +2340,11 @@ Prompt text is never printed unless you pass --show-prompts; --json leaves out s
 var VALUED = ["id", "session", "project", "since", "limit", "cwd", "budget", "warn", "context", "window"];
 function history(p) {
   const sessions = load(p);
-  const live = liveCosts(readSamples(join14(dataDir(), "limits.jsonl")));
+  const live = liveCosts(readSamples(join15(dataDir(), "limits.jsonl")));
   const d = buildHistory(sessions, { project: str(p, "project"), since: dateArg(p, "since") }, live);
   const all = buildHistory(sessions, {}).tasks;
-  const accuracy = accuracyLine(evaluate(readLog(join14(dataDir(), "estimates.jsonl")), all));
-  const billing = readBilling(join14(dataDir(), "limits.jsonl"));
+  const accuracy = accuracyLine(evaluate(readLog(join15(dataDir(), "estimates.jsonl")), all));
+  const billing = readBilling(join15(dataDir(), "limits.jsonl"));
   const opts = { limit: int(p, "limit", 15), showPrompts: p.flags["show-prompts"] === true, showTitles: p.flags["show-titles"] === true, accuracy, ...billing };
   return p.flags.json ? historyJson(d, opts) : renderHistory(d, opts);
 }
@@ -2284,8 +2354,8 @@ function liveCosts(samples) {
   return m;
 }
 function version() {
-  const pkg = join14(fileURLToPath2(import.meta.url), "..", "..", "package.json");
-  return JSON.parse(readFileSync8(pkg, "utf8")).version;
+  const pkg = join15(fileURLToPath2(import.meta.url), "..", "..", "package.json");
+  return JSON.parse(readFileSync9(pkg, "utf8")).version;
 }
 var COMMANDS = {
   history: async () => history,

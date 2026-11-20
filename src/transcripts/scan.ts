@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { writeAtomic } from '../fsutil.js';
 import { parseSession } from './parse.js';
 import type { Session } from './types.js';
 
@@ -92,6 +93,15 @@ function entryFor(f: SessionFiles, old: Record<string, CacheEntry>, keepPrompts:
   }
 }
 
+/** Write the cache atomically; a failed write (read-only dir, EPERM on a rename in Windows) only costs a rescan. */
+function saveCache(file: string, entries: Record<string, CacheEntry>): void {
+  try {
+    writeAtomic(file, JSON.stringify({ version: CACHE_VERSION, entries }));
+  } catch {
+    // the cache is optional: the next run rescans
+  }
+}
+
 /** Load every session, reusing the cache for files that have not changed; rewrite it only if something did. */
 export function loadSessions(opts: LoadOptions): Session[] {
   const useCache = !opts.keepPrompts && opts.cacheFile;
@@ -107,7 +117,7 @@ export function loadSessions(opts: LoadOptions): Session[] {
     if (r.entry.session) sessions.push(r.entry.session);
   }
   changed ||= Object.keys(old).length !== Object.keys(next).length;
-  if (useCache && changed) writeFileSync(opts.cacheFile!, JSON.stringify({ version: CACHE_VERSION, entries: next }));
+  if (useCache && changed) saveCache(opts.cacheFile!, next);
   sessions.sort((a, b) => (a.start < b.start ? -1 : 1));
   return sessions;
 }

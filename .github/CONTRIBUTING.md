@@ -15,13 +15,26 @@ and as a plugin with `claude --plugin-dir .`.
 ## Ground rules
 
 - **No runtime dependencies.** The CLI ships as one bundled file, `dist/cli.js`.
-- **`dist/cli.js` is committed**, because the plugin runs it without a build step. After
-  changing `src/`, run `npm run build` and commit `dist/` with your change.
+- **`dist/cli.js` is committed**, because the plugin runs it without a build step, but
+  only the maintainer rebuilds and commits it (see below).
 - **Nothing leaves the machine.** budgetline reads local transcripts and writes only to
   its own data folder. No network calls, no telemetry.
 - **New behaviour comes with a test.** Tests use temporary folders, never your real
   `~/.claude` or `~/.budgetline`.
 - Keep files under 300 lines and functions under 50.
+
+## What a pull request may touch
+
+Pull requests change `src/` and `tests/` (and docs) only. Please do **not** change:
+
+- `dist/` (the bundle the plugin runs),
+- `package.json` or `package-lock.json`,
+- `.github/workflows/`,
+- `hooks/` or `commands/` (the plugin's hooks and commands).
+
+The maintainer reviews the source change, builds `dist/cli.js` and publishes releases.
+A pull request that touches these paths will be closed, and its source change may be
+applied by the maintainer with credit to you.
 
 ## Pull requests
 

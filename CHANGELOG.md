@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.1
+
+- **Prompt note only on the first prompt of a session.** Follow-up messages no longer get
+  a note: it appears only on the first prompt the hook sees for a session, while its
+  transcript has no reply yet. It no longer applies the bias correction (measured on whole
+  sessions, not on one message); with low confidence it gives the rough figure without
+  calling the task big; it points to `/budgetline:estimate`, the name that always resolves.
+  Turn it off with `budgetline hook disable` (see README, *Prompt note*).
+- **Atomic transcript cache** (closes #2). The cache is written to a temporary file and
+  renamed over the old one, so a hook never reads it half-written; a failed write or rename
+  (EPERM on Windows) only costs a rescan. Appends to the estimate and limit logs start on a
+  new line after a partial last line, so the new record stays whole. Thanks to **@bfs2021**
+  for the fix and its test (#3).
+- New tagline in `--help`: *See where your Claude Code budget goes — and stop hitting your
+  limits.*
+
 ## 0.3.0
 
 First public release. Everything runs locally from the transcripts Claude Code already
